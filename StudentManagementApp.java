@@ -2,19 +2,40 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.ArrayList;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
+@SuppressWarnings("")
 public class StudentManagementApp implements ActionListener {
-
     private JButton addButton, deleteButton, viewButton, updateButton;
     private JTextField idField, nameField, ageField, gradeField;
-    private ArrayList<Student> students = new ArrayList<>();
+    private static final String URL = "jdbc:postgresql://localhost:5432/test";
+    private static final String USER = "polanr";
+    private static final String PASSWORD = "Mylove$76";
+    private Connection conn;
 
     public static void main(String[] args) {
-        new StudentManagementApp();
+        new StudentManagementApp().start();
     }
 
-    public StudentManagementApp() {
+    public void start() {
+        try {
+            // Establish the database connection once
+            conn = DriverManager.getConnection(URL, USER, PASSWORD);
+            System.out.println("Connected to the database!");
+            
+            // Start the App
+            initializeGUI();
+
+        } catch (SQLException e) {
+            System.err.println("Database connection failed: " + e.getMessage());
+        }
+    }
+
+    private void initializeGUI() {
         JFrame frame = new JFrame("Student Management System");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(900, 400);
@@ -69,12 +90,18 @@ public class StudentManagementApp implements ActionListener {
         frame.add(panel, BorderLayout.CENTER);
         frame.add(buttonPanel, BorderLayout.SOUTH);
         frame.setVisible(true);
+    }
+
+    public StudentManagementApp() {
 
     }
 
     // Helper method to create a panel for each label and text field
     private static JPanel createFieldPanel(JLabel label, JTextField textField) {
-        JPanel fieldPanel = new JPanel(new FlowLayout(FlowLayout.LEFT)); // Align to the left
+        JPanel fieldPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        fieldPanel.setBackground(new Color(240, 240, 250)); // Light background
+        label.setFont(new Font("Arial", Font.BOLD, 14));    // Custom font
+        textField.setFont(new Font("Arial", Font.PLAIN, 14));
         fieldPanel.add(label);
         fieldPanel.add(textField);
         return fieldPanel;
@@ -94,73 +121,95 @@ public class StudentManagementApp implements ActionListener {
     }
 
     private void addStudent() {
-        try {
-            String name = nameField.getText().trim();
-            int age = Integer.parseInt(ageField.getText().trim());
-            String grade = gradeField.getText().trim();
-            String id = idField.getText().trim();
+        String sql = "INSERT INTO students (id, name, age, grade) VALUES (?, ?, ?, ?)";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, idField.getText().trim());
+            stmt.setString(2, nameField.getText().trim());
+            stmt.setInt(3, Integer.parseInt(ageField.getText().trim()));
+            stmt.setString(4, gradeField.getText().trim());
 
-            if (id == null || name.isEmpty() || grade.isEmpty()) {
-                JOptionPane.showMessageDialog(null, "Please fill all fields!", "Error", JOptionPane.ERROR_MESSAGE);
-                return;
+            if (stmt.executeUpdate() > 0) {
+                JOptionPane.showMessageDialog(null, "Student added successfully!");
+                clearFields();
             }
-
-            Student student = new Student(name, age, grade, id);
-            students.add(student);
-
-            idField.setText("");
-            nameField.setText("");
-            ageField.setText("");
-            gradeField.setText("");
-
-            JOptionPane.showMessageDialog(null, "Student Successfully Added!");
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(null, "Invalid Age! Please enter a valid age", "Error", JOptionPane.ERROR_MESSAGE);
+        } catch (NumberFormatException nfe) {
+            JOptionPane.showMessageDialog(null, "Invalid input for age. Please enter a number.", "Error", JOptionPane.ERROR_MESSAGE);
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(null, "Error adding student: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void deleteStudent() {
-        String idToDelete = JOptionPane.showInputDialog(null, "Enter the Student ID to delete:", 
-                                                    "Delete Student", JOptionPane.QUESTION_MESSAGE);
+        String sql = "DELETE FROM Students WHERE id = ?";
+        try {
+            String id = JOptionPane.showInputDialog("Enter the Student ID to delete:");
+            if (id == null || id.trim().isEmpty()) return;
 
-        if (idToDelete == null || idToDelete.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(null, "No ID entered. Deletion cancelled.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        boolean found = false;
-
-        for (int i = 0; i < students.size(); i++) {
-            if (students.get(i).getId().equals(idToDelete.trim())) {
-                students.remove(i);
-                found = true;
-                break;
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, id.trim());
+                if (stmt.executeUpdate() > 0) {
+                    JOptionPane.showMessageDialog(null, "Student deleted successfully!");
+                } else {
+                    JOptionPane.showMessageDialog(null, "Student not found!", "Error", JOptionPane.ERROR_MESSAGE);
+                }
             }
-        }
-
-        if (found) {
-            JOptionPane.showMessageDialog(null, "Student with ID " + idToDelete + " deleted successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
-        } else {
-            JOptionPane.showMessageDialog(null, "Student with ID " + idToDelete + " not found!", "Error", JOptionPane.ERROR_MESSAGE);
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(null, "Error deleting student: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void viewStudent() {
-        if (students.isEmpty()) {
-           JOptionPane.showMessageDialog(null, "No students found!", "Info", JOptionPane.INFORMATION_MESSAGE);
-            return; 
+        String sql = "SELECT * FROM Students";
+        try (PreparedStatement stmt = conn.prepareStatement(sql); ResultSet rs = stmt.executeQuery()) {
+            StringBuilder students = new StringBuilder("ID\tName\tAge\tGrade\n");
+            while (rs.next()) {
+                students.append(rs.getString("id")).append("\t")
+                        .append(rs.getString("name")).append("\t")
+                        .append(rs.getInt("age")).append("\t")
+                        .append(rs.getString("grade")).append("\n");
+            }
+            JOptionPane.showMessageDialog(null, students.toString(), "Students", JOptionPane.INFORMATION_MESSAGE);
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(null, "Error retrieving students: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
         }
-        
-
-        StringBuilder studentList = new StringBuilder("Student List:\n");
-        for (Student student : students) {
-            studentList.append(student).append("\n");
-        }
-
-        JOptionPane.showMessageDialog(null, studentList.toString(), "Students", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void updateStudent() {
+        String sql = "UPDATE students SET name = ?, age = ?, grade = ? WHERE id = ?";
+        try {
+            String id = JOptionPane.showInputDialog("Enter the Student ID to update:");
+            if (id == null || id.trim().isEmpty()) return;
 
+            String name = JOptionPane.showInputDialog("Enter new name:");
+            String ageStr = JOptionPane.showInputDialog("Enter new age:");
+            String grade = JOptionPane.showInputDialog("Enter new grade:");
+
+            if (name == null || ageStr == null || grade == null) return;
+
+            int age = Integer.parseInt(ageStr.trim());
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, name.trim());
+                stmt.setInt(2, age);
+                stmt.setString(3, grade.trim());
+                stmt.setString(4, id.trim());
+                if (stmt.executeUpdate() > 0) {
+                    JOptionPane.showMessageDialog(null, "Student updated successfully!");
+                } else {
+                    JOptionPane.showMessageDialog(null, "Student not found!", "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        } catch (NumberFormatException nfe) {
+            JOptionPane.showMessageDialog(null, "Invalid input for age. Please enter a number.", "Error", JOptionPane.ERROR_MESSAGE);
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(null, "Error updating student: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void clearFields() {
+        idField.setText("");
+        nameField.setText("");
+        ageField.setText("");
+        gradeField.setText("");
     }
 }

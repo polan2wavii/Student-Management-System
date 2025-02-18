@@ -12,9 +12,9 @@ import java.sql.SQLException;
 public class StudentManagementApp implements ActionListener {
     private JButton addButton, deleteButton, viewButton, updateButton;
     private JTextField idField, nameField, ageField, gradeField;
-    private static final String URL = "jdbc:postgresql://localhost:5432/test";
-    private static final String USER = "polanr";
-    private static final String PASSWORD = "Mylove$76";
+    private static final String URL = "jdbc:postgresql://localhost:5432/name-of-database";
+    private static final String USER = "username";
+    private static final String PASSWORD = "your-password";
     private Connection conn;
 
     public static void main(String[] args) {
